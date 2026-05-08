@@ -16,6 +16,14 @@ contextBridge.exposeInMainWorld('hotaru', {
   showOverlay: () => ipcRenderer.send('overlay-show'),
   hideOverlay: () => ipcRenderer.send('overlay-hide'),
 
-  // Remove event listeners (cleanup)
+  // OS keychain access — keytar runs in main process, proxied here via IPC
+  keychainGet: (account: string): Promise<string | null> =>
+    ipcRenderer.invoke('keytar-get', account),
+  keychainSet: (account: string, value: string): Promise<void> =>
+    ipcRenderer.invoke('keytar-set', account, value),
+  keychainDelete: (account: string): Promise<boolean> =>
+    ipcRenderer.invoke('keytar-delete', account),
+
+  // Remove event listeners (cleanup on component unmount)
   removeAllListeners: (channel: string) => ipcRenderer.removeAllListeners(channel)
 })

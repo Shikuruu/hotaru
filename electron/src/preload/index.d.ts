@@ -2,11 +2,21 @@
 declare global {
   interface Window {
     hotaru: {
+      // Push-to-talk
       onPushToTalkStart: (callback: () => void) => void
       onPushToTalkStop: (callback: () => void) => void
       pushToTalkStop: () => void
+
+      // Overlay visibility
       showOverlay: () => void
       hideOverlay: () => void
+
+      // OS keychain (backed by keytar → Windows Credential Manager / macOS Keychain)
+      keychainGet: (account: string) => Promise<string | null>
+      keychainSet: (account: string, value: string) => Promise<void>
+      keychainDelete: (account: string) => Promise<boolean>
+
+      // Cleanup
       removeAllListeners: (channel: string) => void
     }
   }

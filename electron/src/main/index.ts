@@ -1,6 +1,11 @@
 import { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
+import keytar from 'keytar'
+
+// All API keys are stored under this service name in the OS keychain
+// (Windows Credential Manager on Windows, Keychain on macOS)
+const KEYTAR_SERVICE = 'hotaru'
 
 // Prevent the app from showing in the dock (macOS) or taskbar
 app.dock?.hide()
@@ -140,6 +145,26 @@ function registerIpcHandlers(): void {
   ipcMain.on('push-to-talk-stop', () => {
     overlayWindow?.webContents.send('push-to-talk-stop')
     panelWindow?.webContents.send('push-to-talk-stop')
+  })
+
+  // ---------------------------------------------------------------------------
+  // Keychain handlers — keytar is a native Node module that can only run in
+  // the main process. The renderer calls these via ipcRenderer.invoke().
+  // ---------------------------------------------------------------------------
+
+  // Get a single stored key by account name
+  ipcMain.handle('keytar-get', async (_event, account: string): Promise<string | null> => {
+    return await keytar.getPassword(KEYTAR_SERVICE, account)
+  })
+
+  // Store a key in the OS keychain
+  ipcMain.handle('keytar-set', async (_event, account: string, value: string): Promise<void> => {
+    await keytar.setPassword(KEYTAR_SERVICE, account, value)
+  })
+
+  // Delete a stored key (used when user clears/resets settings)
+  ipcMain.handle('keytar-delete', async (_event, account: string): Promise<boolean> => {
+    return await keytar.deletePassword(KEYTAR_SERVICE, account)
   })
 }
 
