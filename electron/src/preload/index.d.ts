@@ -1,4 +1,13 @@
 // Type declarations for the API exposed via contextBridge in preload/index.ts
+
+// One captured display — returned as an array (one entry per connected screen)
+interface ScreenshotResult {
+  displayName: string  // e.g. "Screen 1", "Built-in Retina Display"
+  base64Jpeg: string   // base64-encoded JPEG, no data-URL prefix
+  width: number
+  height: number
+}
+
 declare global {
   interface Window {
     hotaru: {
@@ -13,6 +22,9 @@ declare global {
 
       // Microphone permission
       requestMicPermission: () => Promise<boolean>
+
+      // Screenshot capture (all connected displays, JPEG base64)
+      captureScreenshot: () => Promise<ScreenshotResult[]>
 
       // OS keychain (backed by keytar → Windows Credential Manager / macOS Keychain)
       keychainGet: (account: string) => Promise<string | null>

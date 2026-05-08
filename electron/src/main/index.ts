@@ -1,8 +1,16 @@
-import { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, systemPreferences } from 'electron'
+import { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, systemPreferences, desktopCapturer } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import keytar from 'keytar'
 import { uIOhook, UiohookKey } from 'uiohook-napi'
+
+// Shape of screenshot data returned to the renderer per display
+interface ScreenshotResult {
+  displayName: string  // e.g. "Screen 1", "Built-in Retina Display"
+  base64Jpeg: string   // base64-encoded JPEG, no data-URL prefix
+  width: number
+  height: number
+}
 
 // All API keys are stored under this service name in the OS keychain
 // (Windows Credential Manager on Windows, Keychain on macOS)
@@ -190,6 +198,35 @@ function registerIpcHandlers(): void {
     }
     // Windows and Linux handle mic permission via the browser getUserMedia prompt
     return true
+  })
+
+  // ---------------------------------------------------------------------------
+  // Screenshot capture handler
+  //
+  // Uses desktopCapturer to grab a JPEG snapshot of every connected display.
+  // Returns an array so the renderer (and later Claude) can see all screens.
+  // Thumbnails are capped at 1920×1080 and encoded as JPEG (85% quality) to
+  // keep file sizes reasonable for the Claude Vision API.
+  //
+  // On macOS this requires Screen Recording permission — the first call will
+  // trigger the OS permission prompt automatically.
+  // ---------------------------------------------------------------------------
+  ipcMain.handle('capture-screenshot', async (): Promise<ScreenshotResult[]> => {
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: 1920, height: 1080 }
+    })
+
+    return sources.map((source, index) => {
+      const jpegBuffer = source.thumbnail.toJPEG(85)
+      const { width, height } = source.thumbnail.getSize()
+      return {
+        displayName: source.name || `Screen ${index + 1}`,
+        base64Jpeg: jpegBuffer.toString('base64'),
+        width,
+        height
+      }
+    })
   })
 
   // ---------------------------------------------------------------------------

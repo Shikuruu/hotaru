@@ -3,6 +3,7 @@ import SettingsScreen from './SettingsScreen'
 import { areSettingsComplete, loadSettings } from './lib/settingsStore'
 import { AudioCapture } from './lib/audioCapture'
 import { AssemblyAIStreamingClient } from './lib/assemblyaiStreaming'
+import { captureAllScreens, ScreenCapture } from './lib/screenCapture'
 
 type VoiceState = 'idle' | 'listening' | 'processing' | 'responding'
 type AppScreen = 'loading' | 'settings' | 'main'
@@ -30,6 +31,8 @@ export default function PanelApp(): JSX.Element {
   const audioCaptureRef = useRef<AudioCapture>(new AudioCapture())
   const assemblyAiClientRef = useRef<AssemblyAIStreamingClient | null>(null)
   const assemblyAiApiKeyRef = useRef<string>('')
+  // Screenshots captured on PTT stop — passed to Claude in the next step
+  const pendingScreenshotsRef = useRef<ScreenCapture[]>([])
 
   // On mount: check keychain and load API keys
   useEffect(() => {
@@ -100,6 +103,19 @@ export default function PanelApp(): JSX.Element {
       // Stop mic immediately so no more audio is captured
       audioCaptureRef.current.stop()
       setAudioLevel(0)
+
+      // Capture all screens and finalise transcript in parallel —
+      // both are fire-and-forget here; screenshots land in the ref
+      // before onFinalTranscript fires (network RTT >> screen capture time)
+      pendingScreenshotsRef.current = []
+      captureAllScreens()
+        .then((screens) => {
+          pendingScreenshotsRef.current = screens
+          console.log(`[Hotaru] Captured ${screens.length} screen(s)`)
+        })
+        .catch((err) => {
+          console.warn('[Hotaru] Screenshot capture failed:', err)
+        })
 
       // Signal AssemblyAI to finalise — triggers onFinalTranscript callback above
       assemblyAiClientRef.current?.forceEndUtterance()

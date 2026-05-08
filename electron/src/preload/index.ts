@@ -1,5 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+// Mirrors the ScreenshotResult interface defined in main/index.ts
+interface ScreenshotResult {
+  displayName: string
+  base64Jpeg: string
+  width: number
+  height: number
+}
+
 // ---------------------------------------------------------------------------
 // Expose a safe, typed API surface to the renderer process.
 // The renderer never gets direct access to Node or Electron internals.
@@ -26,6 +34,11 @@ contextBridge.exposeInMainWorld('hotaru', {
     ipcRenderer.invoke('keytar-set', account, value),
   keychainDelete: (account: string): Promise<boolean> =>
     ipcRenderer.invoke('keytar-delete', account),
+
+  // Screenshot capture — calls desktopCapturer in main process and returns
+  // JPEG snapshots of every connected display as base64 strings
+  captureScreenshot: (): Promise<ScreenshotResult[]> =>
+    ipcRenderer.invoke('capture-screenshot'),
 
   // Remove event listeners (cleanup on component unmount)
   removeAllListeners: (channel: string) => ipcRenderer.removeAllListeners(channel)
