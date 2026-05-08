@@ -10,7 +10,8 @@
     "dist": "npm run build && electron-builder"
   },
   "dependencies": {
-    "keytar": "^7.9.0"
+    "keytar": "^7.9.0",
+    "uiohook-napi": "^1.5.5"
   },
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.1",

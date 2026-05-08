@@ -11,6 +11,9 @@ declare global {
       showOverlay: () => void
       hideOverlay: () => void
 
+      // Microphone permission
+      requestMicPermission: () => Promise<boolean>
+
       // OS keychain (backed by keytar → Windows Credential Manager / macOS Keychain)
       keychainGet: (account: string) => Promise<string | null>
       keychainSet: (account: string, value: string) => Promise<void>

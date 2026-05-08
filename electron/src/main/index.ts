@@ -1,11 +1,16 @@
-import { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage } from 'electron'
+import { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, systemPreferences } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import keytar from 'keytar'
+import { uIOhook, UiohookKey } from 'uiohook-napi'
 
 // All API keys are stored under this service name in the OS keychain
 // (Windows Credential Manager on Windows, Keychain on macOS)
 const KEYTAR_SERVICE = 'hotaru'
+
+// Tracks whether the push-to-talk combo is currently held down so we only
+// fire push-to-talk-stop once per key-up and ignore unrelated Space presses.
+let isPushToTalkActive = false
 
 // Prevent the app from showing in the dock (macOS) or taskbar
 app.dock?.hide()
@@ -122,14 +127,38 @@ function createTray(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Global push-to-talk shortcut (Ctrl + Alt)
+// Global push-to-talk via uiohook-napi
+//
+// Unlike Electron's globalShortcut (which only fires on key DOWN), uiohook
+// gives us both keydown and keyup events system-wide — exactly what we need
+// for hold-to-talk behaviour. This mirrors the CGEvent tap used in the
+// original Swift/macOS version.
+//
+// Combo: Ctrl + Alt + Space
 // ---------------------------------------------------------------------------
-function registerGlobalShortcut(): void {
-  // On key down — start recording
-  globalShortcut.register('CommandOrControl+Alt+Space', () => {
-    overlayWindow?.webContents.send('push-to-talk-start')
-    panelWindow?.webContents.send('push-to-talk-start')
+function registerPushToTalkHook(): void {
+  uIOhook.on('keydown', (event) => {
+    // Detect Ctrl + Alt + Space held together
+    const isCtrlAltSpace =
+      event.ctrlKey && event.altKey && event.keycode === UiohookKey.Space
+
+    if (isCtrlAltSpace && !isPushToTalkActive) {
+      isPushToTalkActive = true
+      overlayWindow?.webContents.send('push-to-talk-start')
+      panelWindow?.webContents.send('push-to-talk-start')
+    }
   })
+
+  uIOhook.on('keyup', (event) => {
+    // Fire stop when Space is released while PTT was active
+    if (event.keycode === UiohookKey.Space && isPushToTalkActive) {
+      isPushToTalkActive = false
+      overlayWindow?.webContents.send('push-to-talk-stop')
+      panelWindow?.webContents.send('push-to-talk-stop')
+    }
+  })
+
+  uIOhook.start()
 }
 
 // ---------------------------------------------------------------------------
@@ -145,6 +174,22 @@ function registerIpcHandlers(): void {
   ipcMain.on('push-to-talk-stop', () => {
     overlayWindow?.webContents.send('push-to-talk-stop')
     panelWindow?.webContents.send('push-to-talk-stop')
+  })
+
+  // ---------------------------------------------------------------------------
+  // Microphone permission handler
+  //
+  // On macOS the app must explicitly request mic access via systemPreferences.
+  // On Windows, getUserMedia() in the renderer triggers the OS prompt automatically.
+  // ---------------------------------------------------------------------------
+  ipcMain.handle('request-mic-permission', async (): Promise<boolean> => {
+    if (process.platform === 'darwin') {
+      const currentStatus = systemPreferences.getMediaAccessStatus('microphone')
+      if (currentStatus === 'granted') return true
+      return await systemPreferences.askForMediaAccess('microphone')
+    }
+    // Windows and Linux handle mic permission via the browser getUserMedia prompt
+    return true
   })
 
   // ---------------------------------------------------------------------------
@@ -175,12 +220,12 @@ app.whenReady().then(() => {
   createTray()
   panelWindow = createPanelWindow()
   overlayWindow = createOverlayWindow()
-  registerGlobalShortcut()
+  registerPushToTalkHook()
   registerIpcHandlers()
 })
 
 app.on('will-quit', () => {
-  globalShortcut.unregisterAll()
+  uIOhook.stop()
 })
 
 // Keep the app running even if all windows are closed (menu bar app pattern)

@@ -16,6 +16,9 @@ contextBridge.exposeInMainWorld('hotaru', {
   showOverlay: () => ipcRenderer.send('overlay-show'),
   hideOverlay: () => ipcRenderer.send('overlay-hide'),
 
+  // Microphone permission request (needed on macOS; Windows handles via getUserMedia)
+  requestMicPermission: (): Promise<boolean> => ipcRenderer.invoke('request-mic-permission'),
+
   // OS keychain access — keytar runs in main process, proxied here via IPC
   keychainGet: (account: string): Promise<string | null> =>
     ipcRenderer.invoke('keytar-get', account),
