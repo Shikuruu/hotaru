@@ -1,8 +1,9 @@
-import { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, systemPreferences, desktopCapturer } from 'electron'
+import { app, BrowserWindow, Tray, Menu, ipcMain, systemPreferences, desktopCapturer } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import keytar from 'keytar'
 import { uIOhook, UiohookKey } from 'uiohook-napi'
+import { createFireflyIcon } from './icon'
 
 // Shape of screenshot data returned to the renderer per display
 interface ScreenshotResult {
@@ -105,8 +106,7 @@ function createOverlayWindow(): BrowserWindow {
 // Tray icon
 // ---------------------------------------------------------------------------
 function createTray(): void {
-  // Use a 16x16 empty placeholder icon for now — replace with real icon later
-  const icon = nativeImage.createEmpty()
+  const icon = createFireflyIcon()
   tray = new Tray(icon)
   tray.setToolTip('Hotaru')
 
