@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+
+  <!-- V8/JIT — required for all Electron apps with Hardened Runtime -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+
+  <!-- Node native addons (keytar, uiohook-napi) load unsigned .node bundles -->
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+
+  <!-- Push-to-talk microphone access -->
+  <key>com.apple.security.device.microphone</key>
+  <true/>
+  <key>com.apple.security.device.audio-input</key>
+  <true/>
+
+</dict>
+</plist>

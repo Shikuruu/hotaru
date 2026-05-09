@@ -58,7 +58,10 @@
         { "target": "nsis", "arch": ["x64"] }
       ],
       "icon": "resources/icon.ico",
-      "requestedExecutionLevel": "asInvoker"
+      "requestedExecutionLevel": "asInvoker",
+      "signingHashAlgorithms": ["sha256"],
+      "signDlls": false,
+      "publisherName": "Hotaru"
     },
 
     "nsis": {
@@ -66,7 +69,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": false,
       "createStartMenuShortcut": true,
-      "shortcutName": "Hotaru"
+      "shortcutName": "Hotaru",
+      "license": "resources/LICENSE.rtf"
     },
 
     "mac": {
@@ -75,7 +79,18 @@
       ],
       "icon": "resources/icon.icns",
       "category": "public.app-category.productivity",
-      "darkModeSupport": true
+      "darkModeSupport": true,
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "resources/entitlements.mac.plist",
+      "entitlementsInherit": "resources/entitlements.mac.inherit.plist",
+      "notarize": {
+        "teamId": "${env.APPLE_TEAM_ID}"
+      },
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Hotaru uses your microphone for push-to-talk voice input.",
+        "NSAppleEventsUsageDescription": "Hotaru uses Apple Events to communicate between processes."
+      }
     },
 
     "dmg": {
