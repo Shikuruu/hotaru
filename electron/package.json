@@ -7,7 +7,10 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "dist": "npm run build && electron-builder"
+    "icons": "node scripts/generate-icons.js",
+    "dist:win": "npm run icons && npm run build && electron-builder --win",
+    "dist:mac": "npm run icons && npm run build && electron-builder --mac",
+    "dist": "npm run icons && npm run build && electron-builder"
   },
   "dependencies": {
     "keytar": "^7.9.0",
@@ -31,22 +34,63 @@
     "vite": "^5.3.4"
   },
   "build": {
-    "appId": "com.hotaru.app",
+    "appId": "com.hotaru.desktop",
     "productName": "Hotaru",
+
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "resources"
     },
+
+    "files": [
+      "out/**/*",
+      "!out/**/*.map"
+    ],
+
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/keytar/**",
+      "node_modules/uiohook-napi/**"
+    ],
+
     "win": {
-      "target": "nsis",
-      "icon": "resources/icon.ico"
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ],
+      "icon": "resources/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
     },
+
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Hotaru"
+    },
+
     "mac": {
-      "target": "dmg",
-      "icon": "resources/icon.icns"
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] }
+      ],
+      "icon": "resources/icon.icns",
+      "category": "public.app-category.productivity",
+      "darkModeSupport": true
     },
+
+    "dmg": {
+      "title": "Install Hotaru",
+      "window": { "width": 540, "height": 380 },
+      "contents": [
+        { "x": 140, "y": 180, "type": "file" },
+        { "x": 400, "y": 180, "type": "link", "path": "/Applications" }
+      ]
+    },
+
     "linux": {
       "target": "AppImage",
-      "icon": "resources/icon.png"
+      "icon": "resources/icon.png",
+      "category": "Utility"
     }
   }
 }

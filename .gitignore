@@ -11,3 +11,6 @@ coding-plans/
 electron/node_modules/
 electron/out/
 electron/dist/
+# Generated icons are committed so CI can package without running the script
+# (uncomment the line below if you prefer to regenerate them on every build)
+# electron/resources/
