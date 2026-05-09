@@ -5,8 +5,9 @@ import { AudioCapture } from './lib/audioCapture'
 import { AssemblyAIStreamingClient } from './lib/assemblyaiStreaming'
 import { captureAllScreens, ScreenCapture } from './lib/screenCapture'
 import { askClaude } from './lib/claudeClient'
+import { speak, stopSpeaking } from './lib/ttsClient'
 
-type VoiceState = 'idle' | 'listening' | 'processing' | 'responding'
+type VoiceState = 'idle' | 'listening' | 'processing' | 'responding' | 'speaking'
 type AppScreen = 'loading' | 'settings' | 'main'
 
 // ---------------------------------------------------------------------------
@@ -34,6 +35,7 @@ export default function PanelApp(): JSX.Element {
   const assemblyAiClientRef = useRef<AssemblyAIStreamingClient | null>(null)
   const assemblyAiApiKeyRef = useRef<string>('')
   const anthropicApiKeyRef = useRef<string>('')
+  const openAiApiKeyRef = useRef<string>('')
   // Screenshots captured on PTT stop — passed to Claude alongside the transcript
   const pendingScreenshotsRef = useRef<ScreenCapture[]>([])
 
@@ -48,6 +50,7 @@ export default function PanelApp(): JSX.Element {
       const settings = await loadSettings()
       assemblyAiApiKeyRef.current = settings.assemblyAiApiKey ?? ''
       anthropicApiKeyRef.current = settings.anthropicApiKey ?? ''
+      openAiApiKeyRef.current = settings.openAiApiKey ?? ''
       setCurrentScreen('main')
     }
     initialise()
@@ -58,12 +61,14 @@ export default function PanelApp(): JSX.Element {
     const settings = await loadSettings()
     assemblyAiApiKeyRef.current = settings.assemblyAiApiKey ?? ''
     anthropicApiKeyRef.current = settings.anthropicApiKey ?? ''
+    openAiApiKeyRef.current = settings.openAiApiKey ?? ''
     setCurrentScreen('main')
   }
 
   // Listen for push-to-talk events from the main process (uiohook-napi)
   useEffect(() => {
     window.hotaru.onPushToTalkStart(async () => {
+      stopSpeaking()
       setMicError(null)
       setLiveTranscript('')
       setClaudeResponse('')
@@ -103,7 +108,10 @@ export default function PanelApp(): JSX.Element {
               },
               onComplete: (fullText) => {
                 console.log('[Hotaru] Claude response:', fullText)
-                setVoiceState('idle')
+                setVoiceState('speaking')
+                speak(fullText, openAiApiKeyRef.current || undefined).finally(() => {
+                  setVoiceState('idle')
+                })
               },
               onError: (error) => {
                 console.error('[Hotaru] Claude error:', error)
@@ -159,6 +167,7 @@ export default function PanelApp(): JSX.Element {
     })
 
     return () => {
+      stopSpeaking()
       audioCaptureRef.current.stop()
       assemblyAiClientRef.current?.disconnect()
       window.hotaru.removeAllListeners('push-to-talk-start')
@@ -226,7 +235,8 @@ function MainScreen({
     idle: 'Ready',
     listening: 'Listening…',
     processing: 'Thinking…',
-    responding: 'Responding…'
+    responding: 'Responding…',
+    speaking: 'Speaking…'
   }
 
   return (
@@ -338,11 +348,13 @@ const styles = {
       state === 'idle' ? '#2a2a2a'
       : state === 'listening' ? '#1a3a1a'
       : state === 'processing' ? '#1a2a3a'
+      : state === 'speaking' ? '#1a2a1a'
       : '#2a1a3a',
     color:
       state === 'idle' ? '#555'
       : state === 'listening' ? '#4ade80'
       : state === 'processing' ? '#60a5fa'
+      : state === 'speaking' ? '#34d399'
       : '#c084fc'
   }),
   settingsButton: {
@@ -391,10 +403,16 @@ const styles = {
       state === 'idle' ? '#333'
       : state === 'listening' ? '#4ade80'
       : state === 'processing' ? '#60a5fa'
+      : state === 'speaking' ? '#34d399'
       : '#c084fc',
     boxShadow:
       state !== 'idle'
-        ? `0 0 6px ${state === 'listening' ? '#4ade80' : state === 'processing' ? '#60a5fa' : '#c084fc'}`
+        ? `0 0 6px ${
+            state === 'listening' ? '#4ade80'
+            : state === 'processing' ? '#60a5fa'
+            : state === 'speaking' ? '#34d399'
+            : '#c084fc'
+          }`
         : 'none'
   }),
   statusText: { fontSize: 12, color: '#888' },

@@ -10,9 +10,9 @@ interface SettingsScreenProps {
 
 // ---------------------------------------------------------------------------
 // SettingsScreen — shown on first launch or when the user clicks "Settings".
-// Collects the three API keys + ElevenLabs voice ID and stores them in the
-// OS keychain via settingsStore. Nothing is sent anywhere until the user
-// explicitly clicks Save.
+// Collects required API keys (Anthropic, AssemblyAI) and an optional OpenAI
+// key for higher-quality TTS. Keys are stored in the OS keychain via
+// settingsStore — nothing is sent anywhere until the user clicks Save.
 // ---------------------------------------------------------------------------
 export default function SettingsScreen({
   onSettingsSaved,
@@ -20,19 +20,15 @@ export default function SettingsScreen({
 }: SettingsScreenProps): JSX.Element {
   const [anthropicApiKey, setAnthropicApiKey] = useState('')
   const [assemblyAiApiKey, setAssemblyAiApiKey] = useState('')
-  const [elevenLabsApiKey, setElevenLabsApiKey] = useState('')
-  const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState('')
+  const [openAiApiKey, setOpenAiApiKey] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  const allFieldsFilled =
-    anthropicApiKey.trim() &&
-    assemblyAiApiKey.trim() &&
-    elevenLabsApiKey.trim() &&
-    elevenLabsVoiceId.trim()
+  // Only the two required keys must be filled to enable Save
+  const canSave = anthropicApiKey.trim() && assemblyAiApiKey.trim()
 
   async function handleSave(): Promise<void> {
-    if (!allFieldsFilled) return
+    if (!canSave) return
     setIsSaving(true)
     setSaveError(null)
 
@@ -40,8 +36,7 @@ export default function SettingsScreen({
       const settingsToSave: HotaruSettings = {
         anthropicApiKey: anthropicApiKey.trim(),
         assemblyAiApiKey: assemblyAiApiKey.trim(),
-        elevenLabsApiKey: elevenLabsApiKey.trim(),
-        elevenLabsVoiceId: elevenLabsVoiceId.trim()
+        ...(openAiApiKey.trim() ? { openAiApiKey: openAiApiKey.trim() } : {})
       }
       await saveSettings(settingsToSave)
       onSettingsSaved()
@@ -61,14 +56,15 @@ export default function SettingsScreen({
         <div>
           <div style={styles.title}>{isFirstTimeSetup ? 'Welcome to Hotaru' : 'Settings'}</div>
           <div style={styles.subtitle}>
-            {isFirstTimeSetup
-              ? 'Enter your API keys to get started'
-              : 'Update your API keys'}
+            {isFirstTimeSetup ? 'Enter your API keys to get started' : 'Update your API keys'}
           </div>
         </div>
       </div>
 
       <div style={styles.body}>
+        {/* Required keys */}
+        <div style={styles.sectionLabel}>Required</div>
+
         <ApiKeyField
           label="Anthropic API Key"
           placeholder="sk-ant-..."
@@ -83,20 +79,18 @@ export default function SettingsScreen({
           value={assemblyAiApiKey}
           onChange={setAssemblyAiApiKey}
         />
+
+        {/* Optional — OpenAI TTS */}
+        <div style={{ ...styles.sectionLabel, marginTop: 4 }}>
+          Optional
+        </div>
         <ApiKeyField
-          label="ElevenLabs API Key"
-          placeholder="Your ElevenLabs key"
-          helpUrl="https://elevenlabs.io"
-          value={elevenLabsApiKey}
-          onChange={setElevenLabsApiKey}
-        />
-        <ApiKeyField
-          label="ElevenLabs Voice ID"
-          placeholder="e.g. kPzsL2i3teMYv0FxEYQ6"
-          helpUrl="https://elevenlabs.io/voice-lab"
-          value={elevenLabsVoiceId}
-          onChange={setElevenLabsVoiceId}
-          isSecret={false}
+          label="OpenAI API Key"
+          placeholder="sk-... (leave blank to use system voice)"
+          helpUrl="https://platform.openai.com/api-keys"
+          value={openAiApiKey}
+          onChange={setOpenAiApiKey}
+          hint="Used for higher-quality voice (OpenAI TTS). If blank, the built-in system voice is used."
         />
 
         {saveError && <div style={styles.errorMessage}>{saveError}</div>}
@@ -104,9 +98,9 @@ export default function SettingsScreen({
 
       <div style={styles.footer}>
         <button
-          style={styles.saveButton(!!allFieldsFilled && !isSaving)}
+          style={styles.saveButton(!!canSave && !isSaving)}
           onClick={handleSave}
-          disabled={!allFieldsFilled || isSaving}
+          disabled={!canSave || isSaving}
         >
           {isSaving ? 'Saving…' : 'Save Keys'}
         </button>
@@ -116,7 +110,7 @@ export default function SettingsScreen({
 }
 
 // ---------------------------------------------------------------------------
-// ApiKeyField — a single labelled input with a link to get the key
+// ApiKeyField — a single labelled input with show/hide toggle and help link
 // ---------------------------------------------------------------------------
 interface ApiKeyFieldProps {
   label: string
@@ -125,6 +119,7 @@ interface ApiKeyFieldProps {
   value: string
   onChange: (value: string) => void
   isSecret?: boolean
+  hint?: string
 }
 
 function ApiKeyField({
@@ -133,7 +128,8 @@ function ApiKeyField({
   helpUrl,
   value,
   onChange,
-  isSecret = true
+  isSecret = true,
+  hint
 }: ApiKeyFieldProps): JSX.Element {
   const [isRevealed, setIsRevealed] = useState(false)
 
@@ -148,7 +144,6 @@ function ApiKeyField({
           style={styles.fieldHelpLink}
           onClick={(e) => {
             e.preventDefault()
-            // Open in the system browser rather than a new Electron window
             window.open(helpUrl, '_blank')
           }}
         >
@@ -175,6 +170,7 @@ function ApiKeyField({
           </button>
         )}
       </div>
+      {hint && <div style={styles.fieldHint}>{hint}</div>}
     </div>
   )
 }
@@ -211,6 +207,13 @@ const styles = {
     flexDirection: 'column' as const,
     gap: 14,
     overflowY: 'auto' as const
+  },
+  sectionLabel: {
+    fontSize: 10,
+    fontWeight: 600,
+    color: '#444',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.08em'
   },
   fieldGroup: {
     display: 'flex',
@@ -257,6 +260,11 @@ const styles = {
     fontSize: 13,
     padding: '0 8px',
     flexShrink: 0
+  },
+  fieldHint: {
+    fontSize: 10,
+    color: '#555',
+    lineHeight: 1.4
   },
   errorMessage: {
     fontSize: 12,
