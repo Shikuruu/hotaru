@@ -7,6 +7,24 @@ import { captureAllScreens, ScreenCapture } from './lib/screenCapture'
 import { askClaude } from './lib/claudeClient'
 import { speak, stopSpeaking } from './lib/ttsClient'
 
+// ---------------------------------------------------------------------------
+// Parse [POINT:x:y:label:screenN] tags out of a Claude response.
+// Returns an array ready to send to the overlay.
+// ---------------------------------------------------------------------------
+function parsePointTags(text: string): OverlayPoint[] {
+  const points: OverlayPoint[] = []
+  // Format: [POINT:0.42:0.31:Submit button:Screen 1]
+  const re = /\[POINT:([0-9.]+):([0-9.]+):([^:[\]]+):([^\]]+)\]/g
+  let match: RegExpExecArray | null
+  while ((match = re.exec(text)) !== null) {
+    const x = parseFloat(match[1])
+    const y = parseFloat(match[2])
+    if (isNaN(x) || isNaN(y)) continue
+    points.push({ x, y, label: match[3].trim(), screen: match[4].trim() })
+  }
+  return points
+}
+
 type VoiceState = 'idle' | 'listening' | 'processing' | 'responding' | 'speaking'
 type AppScreen = 'loading' | 'settings' | 'main'
 
@@ -69,6 +87,7 @@ export default function PanelApp(): JSX.Element {
   useEffect(() => {
     window.hotaru.onPushToTalkStart(async () => {
       stopSpeaking()
+      window.hotaru.sendOverlayPoints([]) // clear any previous firefly cursors
       setMicError(null)
       setLiveTranscript('')
       setClaudeResponse('')
@@ -108,6 +127,13 @@ export default function PanelApp(): JSX.Element {
               },
               onComplete: (fullText) => {
                 console.log('[Hotaru] Claude response:', fullText)
+
+                // Parse and send [POINT] annotations to the overlay
+                const points = parsePointTags(fullText)
+                if (points.length > 0) {
+                  window.hotaru.sendOverlayPoints(points)
+                }
+
                 setVoiceState('speaking')
                 speak(fullText, openAiApiKeyRef.current || undefined).finally(() => {
                   setVoiceState('idle')

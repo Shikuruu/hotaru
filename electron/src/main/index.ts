@@ -177,6 +177,11 @@ function registerIpcHandlers(): void {
   ipcMain.on('overlay-show', () => overlayWindow?.showInactive())
   ipcMain.on('overlay-hide', () => overlayWindow?.hide())
 
+  // Panel renderer sends parsed [POINT] data → forward to overlay renderer
+  ipcMain.on('overlay-point', (_event, points: unknown) => {
+    overlayWindow?.webContents.send('overlay-point', points)
+  })
+
   // Renderer signals push-to-talk released (key up comes from renderer side
   // since globalShortcut only fires on key down)
   ipcMain.on('push-to-talk-stop', () => {

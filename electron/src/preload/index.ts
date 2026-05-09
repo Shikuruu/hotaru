@@ -8,6 +8,14 @@ interface ScreenshotResult {
   height: number
 }
 
+// A single parsed [POINT] annotation from a Claude response
+interface OverlayPoint {
+  x: number      // 0–1 fraction of screen width
+  y: number      // 0–1 fraction of screen height
+  label: string  // short description to show near the cursor
+  screen: string // display name (e.g. "Screen 1")
+}
+
 // ---------------------------------------------------------------------------
 // Expose a safe, typed API surface to the renderer process.
 // The renderer never gets direct access to Node or Electron internals.
@@ -39,6 +47,11 @@ contextBridge.exposeInMainWorld('hotaru', {
   // JPEG snapshots of every connected display as base64 strings
   captureScreenshot: (): Promise<ScreenshotResult[]> =>
     ipcRenderer.invoke('capture-screenshot'),
+
+  // Overlay point annotations — panel sends, overlay receives (both via main)
+  sendOverlayPoints: (points: OverlayPoint[]) => ipcRenderer.send('overlay-point', points),
+  onOverlayPoint: (callback: (points: OverlayPoint[]) => void) =>
+    ipcRenderer.on('overlay-point', (_event, points) => callback(points)),
 
   // Remove event listeners (cleanup on component unmount)
   removeAllListeners: (channel: string) => ipcRenderer.removeAllListeners(channel)

@@ -8,6 +8,14 @@ interface ScreenshotResult {
   height: number
 }
 
+// A single parsed [POINT] annotation from a Claude response
+interface OverlayPoint {
+  x: number      // 0–1 fraction of screen width
+  y: number      // 0–1 fraction of screen height
+  label: string  // short description shown near the firefly cursor
+  screen: string // display name (e.g. "Screen 1")
+}
+
 declare global {
   interface Window {
     hotaru: {
@@ -30,6 +38,10 @@ declare global {
       keychainGet: (account: string) => Promise<string | null>
       keychainSet: (account: string, value: string) => Promise<void>
       keychainDelete: (account: string) => Promise<boolean>
+
+      // Overlay point annotations
+      sendOverlayPoints: (points: OverlayPoint[]) => void
+      onOverlayPoint: (callback: (points: OverlayPoint[]) => void) => void
 
       // Cleanup
       removeAllListeners: (channel: string) => void
