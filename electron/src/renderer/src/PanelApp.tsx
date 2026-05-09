@@ -4,6 +4,7 @@ import { areSettingsComplete, loadSettings } from './lib/settingsStore'
 import { AudioCapture } from './lib/audioCapture'
 import { AssemblyAIStreamingClient } from './lib/assemblyaiStreaming'
 import { captureAllScreens, ScreenCapture } from './lib/screenCapture'
+import { askClaude } from './lib/claudeClient'
 
 type VoiceState = 'idle' | 'listening' | 'processing' | 'responding'
 type AppScreen = 'loading' | 'settings' | 'main'
@@ -25,13 +26,15 @@ export default function PanelApp(): JSX.Element {
   const [voiceState, setVoiceState] = useState<VoiceState>('idle')
   const [audioLevel, setAudioLevel] = useState(0)
   const [liveTranscript, setLiveTranscript] = useState('')
+  const [claudeResponse, setClaudeResponse] = useState('')
   const [micError, setMicError] = useState<string | null>(null)
 
   // Stable refs — never trigger re-renders, always hold the latest instances
   const audioCaptureRef = useRef<AudioCapture>(new AudioCapture())
   const assemblyAiClientRef = useRef<AssemblyAIStreamingClient | null>(null)
   const assemblyAiApiKeyRef = useRef<string>('')
-  // Screenshots captured on PTT stop — passed to Claude in the next step
+  const anthropicApiKeyRef = useRef<string>('')
+  // Screenshots captured on PTT stop — passed to Claude alongside the transcript
   const pendingScreenshotsRef = useRef<ScreenCapture[]>([])
 
   // On mount: check keychain and load API keys
@@ -44,6 +47,7 @@ export default function PanelApp(): JSX.Element {
       }
       const settings = await loadSettings()
       assemblyAiApiKeyRef.current = settings.assemblyAiApiKey ?? ''
+      anthropicApiKeyRef.current = settings.anthropicApiKey ?? ''
       setCurrentScreen('main')
     }
     initialise()
@@ -53,6 +57,7 @@ export default function PanelApp(): JSX.Element {
   async function handleSettingsSaved(): Promise<void> {
     const settings = await loadSettings()
     assemblyAiApiKeyRef.current = settings.assemblyAiApiKey ?? ''
+    anthropicApiKeyRef.current = settings.anthropicApiKey ?? ''
     setCurrentScreen('main')
   }
 
@@ -61,6 +66,7 @@ export default function PanelApp(): JSX.Element {
     window.hotaru.onPushToTalkStart(async () => {
       setMicError(null)
       setLiveTranscript('')
+      setClaudeResponse('')
       setVoiceState('listening')
 
       // Create a fresh AssemblyAI client for this session and connect
@@ -73,8 +79,39 @@ export default function PanelApp(): JSX.Element {
         onFinalTranscript: (finalText) => {
           setLiveTranscript(finalText)
           setVoiceState('processing')
-          // Claude integration wired in next step — for now just log
+          setClaudeResponse('')
+
+          if (!finalText.trim()) {
+            // Nothing was said — bail out silently
+            setVoiceState('idle')
+            return
+          }
+
           console.log('[Hotaru] Final transcript:', finalText)
+
+          // Call Claude with the transcript + any captured screenshots.
+          // Screenshots may still be landing from the parallel capture — they'll
+          // be in pendingScreenshotsRef by the time this async call starts.
+          setVoiceState('responding')
+          askClaude(
+            anthropicApiKeyRef.current,
+            finalText,
+            pendingScreenshotsRef.current,
+            {
+              onTextDelta: (delta) => {
+                setClaudeResponse((prev) => prev + delta)
+              },
+              onComplete: (fullText) => {
+                console.log('[Hotaru] Claude response:', fullText)
+                setVoiceState('idle')
+              },
+              onError: (error) => {
+                console.error('[Hotaru] Claude error:', error)
+                setMicError(`Claude error: ${error.message}`)
+                setVoiceState('idle')
+              }
+            }
+          )
         },
 
         onError: (error) => {
@@ -147,6 +184,7 @@ export default function PanelApp(): JSX.Element {
       voiceState={voiceState}
       audioLevel={audioLevel}
       liveTranscript={liveTranscript}
+      claudeResponse={claudeResponse}
       micError={micError}
       onOpenSettings={() => setCurrentScreen('settings')}
     />
@@ -171,6 +209,7 @@ interface MainScreenProps {
   voiceState: VoiceState
   audioLevel: number
   liveTranscript: string
+  claudeResponse: string
   micError: string | null
   onOpenSettings: () => void
 }
@@ -179,6 +218,7 @@ function MainScreen({
   voiceState,
   audioLevel,
   liveTranscript,
+  claudeResponse,
   micError,
   onOpenSettings
 }: MainScreenProps): JSX.Element {
@@ -219,10 +259,19 @@ function MainScreen({
           )}
         </div>
 
-        {/* Live transcript — shown while listening and after finalisation */}
+        {/* Live transcript — shown while listening / waiting for Claude */}
         {(voiceState === 'listening' || voiceState === 'processing') && liveTranscript && (
           <div style={styles.transcriptBubble}>
             <span style={styles.transcriptText}>{liveTranscript}</span>
+          </div>
+        )}
+
+        {/* Claude response — streams in while responding, stays when idle */}
+        {claudeResponse && (
+          <div style={styles.responseBubble}>
+            <span style={styles.responseLabel}>Hotaru</span>
+            <span style={styles.responseText}>{claudeResponse}</span>
+            {voiceState === 'responding' && <span style={styles.cursor}>▋</span>}
           </div>
         )}
 
@@ -378,6 +427,34 @@ const styles = {
     fontSize: 13,
     color: '#ddd',
     lineHeight: 1.5
+  },
+  // Claude's streamed response
+  responseBubble: {
+    background: '#0f1f2e',
+    border: '1px solid #1a3a5a',
+    borderRadius: 8,
+    padding: '10px 14px',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 4
+  },
+  responseLabel: {
+    fontSize: 10,
+    fontWeight: 600,
+    color: '#60a5fa',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.06em'
+  },
+  responseText: {
+    fontSize: 13,
+    color: '#e2e8f0',
+    lineHeight: 1.6,
+    whiteSpace: 'pre-wrap' as const
+  },
+  cursor: {
+    fontSize: 13,
+    color: '#60a5fa',
+    animation: 'blink 1s step-end infinite'
   },
   errorBox: {
     fontSize: 11,
